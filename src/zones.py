@@ -1,16 +1,16 @@
-"""A의 schema_version=1 구역 JSON과 원본 좌표 기반 마우스 편집기.
-마우스 입력만 표시 좌표에서 원본 좌표로 역변환하며 저장 자료는 항상 원본 기준이다.
-유효성 검사를 저장과 불러오기에 공통 적용하여 잘못된 구역이 감지 단계로 넘어가지 않게 한다.
+"""A의 schema_version=1 JSON과 다각형 편집을 integration 조작으로 제공한다.
+표시 좌표는 실제 축별 크기로 복원하고 저장/불러오기에 동일 검증을 적용한다.
 """
 from __future__ import annotations
 
-import json
-from pathlib import Path
-import math
 from typing import Any
 
 import cv2
 import numpy as np
+
+import json
+from pathlib import Path
+import math
 
 
 def validate_zones(zones, frame_size):
@@ -96,8 +96,11 @@ def save_zones(path: str, zones: list[dict[str, Any]], frame_size: tuple[int, in
     valid = validate_zones(zones, frame_size)
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(dict(schema_version=1, frame_size=list(frame_size), zones=valid),
-                                 ensure_ascii=False, indent=2), encoding='utf-8')
+    try:
+        target.write_text(json.dumps(dict(schema_version=1, frame_size=list(frame_size), zones=valid),
+                                     ensure_ascii=False, indent=2), encoding='utf-8')
+    except OSError as exc:
+        raise OSError(f"구역 JSON 저장 실패: {path}") from exc
 
 
 def load_zones(path: str, frame_size: tuple[int, int]) -> list[dict[str, Any]]:

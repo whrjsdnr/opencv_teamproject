@@ -1,11 +1,10 @@
-"""A 브랜치 0c6476b의 실제 구현을 B·C 공통 경로에 통합한 모듈.
-전처리→MOG2→원본 좌표 침입→상태 전이 순서로 호출하며 파일 기록은 B가 담당한다.
-"""
+"""A 전처리에 integration의 축소 설정과 실제 축별 좌표 복원을 연결한다."""
 from __future__ import annotations
 
 from typing import Any
-import numpy as np
+
 import cv2
+import numpy as np
 
 
 def preprocess_frame(frame: np.ndarray, config: dict[str, Any], roi: tuple[int, int, int, int] | None = None) -> tuple[np.ndarray, dict[str, float]]:
@@ -44,6 +43,8 @@ def preprocess_frame(frame: np.ndarray, config: dict[str, Any], roi: tuple[int, 
     # ROI를 자른 실제 크기에서 두 축 제한을 모두 적용하며 확대하지 않는다.
     if config.get("resize_enabled", True):
         bounds = config.get("analysis_resolution", (config.get("target_width", cw), ch))
+        if bounds[0] <= 0 or bounds[1] <= 0:
+            raise ValueError("analysis_resolution은 양수여야 합니다")
         scale = min(1.0, bounds[0] / cw, bounds[1] / ch)
     else:
         scale = 1.0
@@ -51,11 +52,9 @@ def preprocess_frame(frame: np.ndarray, config: dict[str, Any], roi: tuple[int, 
     resized = cv2.resize(cropped, (target_w, target_h), interpolation=cv2.INTER_AREA)
 
     # 3. 동일 blur_kernel로 블러 (양의 홀수 검증)
-    blur_kernel = int(config.get("blur_kernel", 5))
-    if blur_kernel < 1:
-        raise ValueError("blur_kernel은 1 이상의 홀수여야 합니다.")
-    if blur_kernel % 2 == 0:
-        raise ValueError("blur_kernel은 홀수여야 합니다.")
+    blur_kernel = config.get("blur_kernel", 5)
+    if not isinstance(blur_kernel, int) or blur_kernel <= 0 or blur_kernel % 2 != 1:
+        raise ValueError("blur_kernel은 양의 홀수여야 합니다")
     blurred = cv2.GaussianBlur(resized, (blur_kernel, blur_kernel), 0)
 
     # 4. 실제 축소 비율과 원본 오프셋 반환
@@ -101,7 +100,3 @@ def restore_boxes(boxes: list[tuple[int, int, int, int]], transform: dict[str, f
         restored.append((int(round(orig_x)), int(round(orig_y)), int(round(orig_w)), int(round(orig_h))))
 
     return restored
-
-
-if __name__ == "__main__":
-    print("preprocess.py 모듈이 정상적으로 로드됩니다.")

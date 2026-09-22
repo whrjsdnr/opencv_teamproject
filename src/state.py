@@ -1,11 +1,7 @@
-"""A 브랜치 0c6476b의 실제 구현을 B·C 공통 경로에 통합한 모듈.
-전처리→MOG2→원본 좌표 침입→상태 전이 순서로 호출하며 파일 기록은 B가 담당한다.
-"""
+"""A 상태 전이와 사건 메타데이터를 B·C의 config 호출 규약으로 제공한다."""
 from __future__ import annotations
 
 from typing import Any
-import numpy as np
-
 
 STATES = ("IDLE", "DETECTING", "ALERT", "CLEARED")
 
@@ -26,8 +22,8 @@ def update_state(states: dict[str, dict[str, Any]], intrusions: dict[str, bool] 
     if not isinstance(frame_index, int):
         raise ValueError(f"frame_index는 정수여야 합니다: {frame_index}")
 
-    alert_frames = config.get("consecutive_frames", config.get("alert_frames", 1))       # ALERT 진입에 필요한 연속 감지 횟수
-    clear_frames = config.get("clear_frames", 5)        # CLEARED 진입에 필요한 연속 미감지 횟수
+    alert_frames = config.get("consecutive_frames", config.get("alert_frames", 5))       # ALERT 진입에 필요한 연속 감지 횟수
+    clear_frames = config.get("clear_frames", 10)        # CLEARED 진입에 필요한 연속 미감지 횟수
 
     new_states: dict[str, dict[str, Any]] = {}
     events: list[dict[str, Any]] = []
@@ -79,6 +75,8 @@ def update_state(states: dict[str, dict[str, Any]], intrusions: dict[str, bool] 
                     events.append({
                         "zone": zone_name,
                         "event": "alert",
+                        "type": "alert",
+                        "zone_name": zone_name,
                         "frame_index": frame_index,
                         "media_time_s": media_time_s,
                     })
@@ -93,6 +91,9 @@ def update_state(states: dict[str, dict[str, Any]], intrusions: dict[str, bool] 
                 events.append({
                     "zone": zone_name,
                     "event": "cleared",
+                    "type": "cleared",
+                    "zone_name": zone_name,
+                    "alert_time_s": alert_time,
                     "frame_index": frame_index,
                     "media_time_s": media_time_s,
                     "duration_s": duration,
@@ -106,7 +107,3 @@ def update_state(states: dict[str, dict[str, Any]], intrusions: dict[str, bool] 
         new_states[zone_name] = zone_state
 
     return new_states, events
-
-
-if __name__ == "__main__":
-    print("state.py 모듈이 정상적으로 로드됩니다.")
