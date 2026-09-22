@@ -81,11 +81,11 @@ def test_modes_cli(video, config, tmp_path, mode):
 
 
 def test_real_a_error_not_hidden(video, config):
-    """실제 경로의 A 미구현 오류가 Mock으로 대체되지 않고 전파되는지 확인한다.
-    현재 A가 스텁이라는 전제의 테스트이며 A 구현 완료 후에는 이 전제를 재검토해야 한다.
+    """실제 경로의 구역 파일 오류가 Mock으로 대체되지 않고 전파되는지 확인한다.
+    A 통합 후에는 스텁 예외 대신 실제 파일 오류를 기대하여 원래의 오류 전파 목적을 유지한다.
     반환값은 없으며 기대 조건 위반은 단언 실패로 보고한다."""
     config.update(mock_detection=False, zones_path='missing.json')
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(FileNotFoundError):
         run_pipeline(video, 'baseline', config)
     assert not (Path(config['output_dir'])/'events.csv').exists()
 

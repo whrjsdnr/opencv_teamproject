@@ -241,6 +241,11 @@ def run_suite(source: str, config: dict, *, seconds=60.0, repeats=3,
     from .pipeline import run_pipeline
     if seconds < 60 or repeats < 3:
         raise ValueError('Formal benchmark requires >=60 seconds and >=3 repeats')
+    # 실제 감지에서는 연속 원본 프레임 기준을 보존하기 위해 간격 1만 허용한다.
+    # interval_only(간격 2)를 포함한 실험은 다른 조건을 장시간 실행하기 전에 거부한다.
+    # 기존 Mock ablation과 실제 standard 세 모드 실험은 그대로 사용할 수 있다.
+    if ablations and not mock:
+        raise ValueError('Real detection requires frame_interval=1; --ablations includes interval_only=2')
     if str(source).isdigit() or not Path(source).is_file():
         raise ValueError('Benchmark requires an existing video file')
     suite_id = 'suite-' + uuid.uuid4().hex[:10]

@@ -71,6 +71,7 @@ def main(argv=None) -> int:
     ap.add_argument('--loop-video', action='store_true', default=None)
     ap.add_argument('--experiment-kind', choices=('throughput', 'realtime'))
     ap.add_argument('--queue-policy', choices=('block', 'drop_oldest'))
+    ap.add_argument('--zones', help='zone JSON path (original video coordinates)')
     args = ap.parse_args(argv)
     try:
         config = load_config(args.config)
@@ -80,6 +81,11 @@ def main(argv=None) -> int:
                 config[name] = value
         if args.duration is not None:
             config['duration_seconds'] = args.duration
+        if args.zones is not None:
+            config['zones_path'] = args.zones
+        # 실제 GUI 실행은 첫 프레임 편집→Space 저장→감시 순서로 진행한다.
+        # headless에서는 파일만 읽으며 Mock 테스트에는 편집기를 끼워 넣지 않는다.
+        config['edit_zones'] = not config.get('no_display', False) and not config.get('mock_detection', False)
         config = validate_config(config)
         source = args.source if args.source is not None else config['source']
         for folder in ('data/samples', config['output_dir']):

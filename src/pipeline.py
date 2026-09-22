@@ -1,6 +1,6 @@
 """B: 공통 분석, 원본 보존 순차/입력 스레드 실행, 사건 CSV 및 화면 표시.
 입력: source/mode/config, 선택적 명시적 Mock backend. 출력: 종료 코드와 results.
-의존: 수정하지 않은 A의 preprocess/detect/zones/state, recorder, benchmark.
+의존: 통합한 A의 preprocess/detect/zones/state, recorder, benchmark.
 A NotImplementedError는 전파한다. Mock은 고정 시간표이며 실제 검출이 아니다.
 큐 드롭은 원본 보존 경로가 없는 현재 구현에서 명시적으로 비활성화한다.
 """
@@ -78,6 +78,10 @@ def validate_config(config: dict) -> dict:
             raise ValueError(f'{key} must be bool')
     if c['queue_policy'] != 'block':
         raise ValueError('drop_oldest is disabled: a separate lossless recording path is not implemented; use block')
+    # A는 미분석 프레임에서 카운터를 유지한다. 연속 원본 프레임이라는 기준을
+    # 바꾸지 않도록 실제 모드에서는 생략을 거부하고 Mock 실험만 기존 동작을 유지한다.
+    if not c['mock_detection'] and c['frame_interval'] != 1:
+        raise ValueError('Real detection requires frame_interval=1')
     if c['timestamp_mode'] not in ('cfr', 'pts'):
         raise ValueError('timestamp_mode must be cfr or pts')
     if c['experiment_kind'] not in ('throughput', 'realtime'):
@@ -130,6 +134,18 @@ class FrameSource:
         self.dropped = 0
         self.produced = 0
         self.closed = False
+        self.first_frame = None
+
+    def edit_first_frame(self):
+        """생산 스레드 시작 전에 원본 첫 프레임으로 편집기를 열고 시작 여부를 반환한다.
+        캡처를 다시 열거나 파일을 되감지 않고 첫 프레임을 보관하여 감시에도 정확히 한 번
+        전달한다. UI 대기 시간은 감시 시각에 포함하지 않으며 Queue 생산도 아직 시작하지 않는다.
+        """
+        ok, frame = self.cap.read()
+        if not ok:
+            raise OSError('Input has no decodable frames')
+        self.first_frame = frame
+        return bool(zone_module.edit_zones(frame, self.config['zones_path']))
 
     def _packets(self):
         """캡처를 읽어 프레임·인덱스·영상 시각·계측 시각이 담긴 패킷을 차례로 산출한다.
@@ -144,7 +160,12 @@ class FrameSource:
         try:
             while not self.stop.is_set():
                 read_start = time.perf_counter()
-                ok, frame = self.cap.read()
+                if self.first_frame is not None:
+                    # UI에서 본 원본도 일반 패킷으로 전달하여 첫 프레임을 유실하지 않는다.
+                    ok, frame = True, self.first_frame
+                    self.first_frame = None
+                else:
+                    ok, frame = self.cap.read()
                 if not ok:
                     if local_index == 0:
                         raise OSError('Input has no decodable frames')
@@ -318,6 +339,10 @@ class RealBackend:
         이전 재생 끝과 다음 시작을 연속 사건으로 보지 않기 위함이며 A 모델 생성 오류는 전파한다."""
         self.background = detect.create_background_subtractor(self.config)
         self.states = {}
+        # A에는 사건 ID가 없으므로 경보마다 새 번호를 만들고 해제까지 연결한다.
+        # 이 어댑터는 소비 스레드에서만 호출되어 상태와 CSV 순서가 뒤섞이지 않는다.
+        self.event_number = 0
+        self.active_ids = {}
 
     def analyze(self, frame, packet):
         """frame을 공통 A 경로로 분석하여 (구역별 bool, 입력 좌표 박스, 단계 ms)를 반환한다.
@@ -326,10 +351,23 @@ class RealBackend:
 
     def update(self, intrusions, packet):
         """intrusions와 packet의 원본 인덱스·영상 시각을 A 상태 함수에 전달하고 (상태, 전이)를 반환한다.
-        분석 생략은 False 대신 None으로 전달하여 비침입 관측으로 오인하지 않게 한다. A 오류는 전파한다."""
+        A 반환 키를 B 표시·사건 형식으로 정규화한다. 실제 실행은 간격 1로 검증되며 A 오류는 전파한다."""
         self.states, events = state.update_state(self.states, intrusions, packet['frame_index'],
                                                  packet['media_time_s'], self.config)
-        return self.states, events
+        normalized = []
+        for event in events:
+            zone = event['zone']
+            if event['event'] == 'alert':
+                self.event_number += 1
+                self.active_ids[zone] = str(self.event_number)
+            normalized.append({**event, 'zone_name': zone, 'type': event['event'],
+                               'event_id': self.active_ids[zone]})
+            if event['event'] == 'cleared':
+                self.active_ids.pop(zone)
+        # A의 내부 state는 그대로 유지하고 B 화면에 필요한 이름만 출력에 추가한다.
+        # media_time_s는 변경하지 않아 녹화가 해제 확정 시각부터 5초 이어진다.
+        return {name: {**value, 'status': value['state']}
+                for name, value in self.states.items()}, normalized
 
 
 class MockBackend:
@@ -547,6 +585,9 @@ def run_pipeline(source: str, mode: str, config: dict[str, Any], *, backend=None
     error = None
     processed_frames = 0
     try:
+        if not mock and c.get('edit_zones', False) and not c['no_display']:
+            if not reader.edit_first_frame():
+                return 0  # Q/Esc 취소도 finally에서 캡처와 창을 정리한다.
         if mode != 'optimized':
             c.update(roi_enabled=False, resize_enabled=False, frame_interval=1)
         if not c['resize_enabled']:
