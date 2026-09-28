@@ -1,4 +1,5 @@
 """A 상태 전이와 사건 메타데이터를 B·C의 config 호출 규약으로 제공한다."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -6,7 +7,13 @@ from typing import Any
 STATES = ("IDLE", "DETECTING", "ALERT", "CLEARED")
 
 
-def update_state(states: dict[str, dict[str, Any]], intrusions: dict[str, bool] | None, frame_index: int, media_time_s: float, config: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
+def update_state(
+    states: dict[str, dict[str, Any]],
+    intrusions: dict[str, bool] | None,
+    frame_index: int,
+    media_time_s: float,
+    config: dict[str, Any],
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
     """[담당: 팀원 A]
     목적: 구역별 상태 전이 계산
     매개변수 / 입력 타입: states: 초기 {}; intrusions: 구역 bool 또는 미분석 None; frame_index: 원본 인덱스; media_time_s: 영상 초; config: 설정
@@ -22,8 +29,10 @@ def update_state(states: dict[str, dict[str, Any]], intrusions: dict[str, bool] 
     if not isinstance(frame_index, int):
         raise ValueError(f"frame_index는 정수여야 합니다: {frame_index}")
 
-    alert_frames = config.get("consecutive_frames", config.get("alert_frames", 5))       # ALERT 진입에 필요한 연속 감지 횟수
-    clear_frames = config.get("clear_frames", 10)        # CLEARED 진입에 필요한 연속 미감지 횟수
+    alert_frames = config.get(
+        "consecutive_frames", config.get("alert_frames", 5)
+    )  # ALERT 진입에 필요한 연속 감지 횟수
+    clear_frames = config.get("clear_frames", 10)  # CLEARED 진입에 필요한 연속 미감지 횟수
 
     new_states: dict[str, dict[str, Any]] = {}
     events: list[dict[str, Any]] = []
@@ -33,12 +42,15 @@ def update_state(states: dict[str, dict[str, Any]], intrusions: dict[str, bool] 
         zone_names |= set(intrusions.keys())
 
     for zone_name in zone_names:
-        zone_state = states.get(zone_name, {
-            "state": "IDLE",
-            "hit_count": 0,
-            "miss_count": 0,
-            "alert_time_s": None,
-        })
+        zone_state = states.get(
+            zone_name,
+            {
+                "state": "IDLE",
+                "hit_count": 0,
+                "miss_count": 0,
+                "alert_time_s": None,
+            },
+        )
 
         # dict 복사 (원본 훼손 방지)
         zone_state = dict(zone_state)
@@ -72,14 +84,16 @@ def update_state(states: dict[str, dict[str, Any]], intrusions: dict[str, bool] 
                 if current != "ALERT":
                     zone_state["state"] = "ALERT"
                     zone_state["alert_time_s"] = media_time_s
-                    events.append({
-                        "zone": zone_name,
-                        "event": "alert",
-                        "type": "alert",
-                        "zone_name": zone_name,
-                        "frame_index": frame_index,
-                        "media_time_s": media_time_s,
-                    })
+                    events.append(
+                        {
+                            "zone": zone_name,
+                            "event": "alert",
+                            "type": "alert",
+                            "zone_name": zone_name,
+                            "frame_index": frame_index,
+                            "media_time_s": media_time_s,
+                        }
+                    )
         else:
             zone_state["miss_count"] += 1
             zone_state["hit_count"] = 0
@@ -88,16 +102,18 @@ def update_state(states: dict[str, dict[str, Any]], intrusions: dict[str, bool] 
                 zone_state["state"] = "CLEARED"
                 alert_time = zone_state.get("alert_time_s")
                 duration = None if alert_time is None else media_time_s - alert_time
-                events.append({
-                    "zone": zone_name,
-                    "event": "cleared",
-                    "type": "cleared",
-                    "zone_name": zone_name,
-                    "alert_time_s": alert_time,
-                    "frame_index": frame_index,
-                    "media_time_s": media_time_s,
-                    "duration_s": duration,
-                })
+                events.append(
+                    {
+                        "zone": zone_name,
+                        "event": "cleared",
+                        "type": "cleared",
+                        "zone_name": zone_name,
+                        "alert_time_s": alert_time,
+                        "frame_index": frame_index,
+                        "media_time_s": media_time_s,
+                        "duration_s": duration,
+                    }
+                )
             elif current == "DETECTING":
                 zone_state["state"] = "IDLE"
             elif current == "CLEARED":

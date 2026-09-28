@@ -1,0 +1,8 @@
+video,outcome,event_id,zone,truth_index,detected_start,detected_end,status,evaluation_end_time,truth_start,truth_end,alert_delay,mode,repeat,analysis
+Browse.mp4,FP,20260927T234756-738162908d-0002,zone1,N/A,37.2,37.84,closed,37.84,N/A,N/A,N/A,baseline,1.0,어떤 GT 구간과도 겹치지 않는 경보
+Browse.mp4,FP,20260927T234756-738162908d-0003,zone1,N/A,39.92,,open_at_eof,42.04,N/A,N/A,N/A,baseline,1.0,어떤 GT 구간과도 겹치지 않는 경보
+Danger.mp4,FP,20260927T234804-194f02748d-0003,zone1,N/A,53.72,54.2,closed,54.2,N/A,N/A,N/A,baseline,1.0,어떤 GT 구간과도 겹치지 않는 경보
+ThreeDanger.mp4,FN,N/A,zone1,0.0,N/A,N/A,N/A,N/A,10.0,11.0,N/A,baseline,1.0,해당 GT에 매칭된 경보 없음
+ThreeDanger.mp4,FN,N/A,zone1,1.0,N/A,N/A,N/A,N/A,58.0,59.0,N/A,baseline,1.0,해당 GT에 매칭된 경보 없음
+LeftBox.mp4,FP,20260927T234829-1fa113bf06-0002,zone1,N/A,21.96,23.96,closed,23.96,N/A,N/A,N/A,baseline,1.0,GT와 겹치지만 이미 1:1 배정된 중복 경보
+LeftBox.mp4,FP,20260927T234829-1fa113bf06-0003,zone1,N/A,24.84,29.36,closed,29.36,N/A,N/A,N/A,baseline,1.0,GT와 겹치지만 이미 1:1 배정된 중복 경보

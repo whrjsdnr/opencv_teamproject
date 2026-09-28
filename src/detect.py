@@ -1,4 +1,5 @@
 """A PR #2의 MOG2 처리와 B·C 설정/감지 인터페이스를 연결한다."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -77,7 +78,9 @@ def detect_motion(
     return boxes
 
 
-def check_intrusion(boxes: list[tuple[int, int, int, int]], zones: list[dict[str, Any]]) -> dict[str, bool]:
+def check_intrusion(
+    boxes: list[tuple[int, int, int, int]], zones: list[dict[str, Any]]
+) -> dict[str, bool]:
     """[담당: 팀원 A]
     목적: 박스 하단 중앙점이 구역에 침입했는지 판단
     매개변수 / 입력 타입: boxes: 원본 좌표; zones: name, points를 가진 목록
@@ -105,7 +108,7 @@ def check_intrusion(boxes: list[tuple[int, int, int, int]], zones: list[dict[str
         polygon = np.array(points, dtype=np.float32)
         intruded = False
 
-        for (x, y, w, h) in boxes:
+        for x, y, w, h in boxes:
             # 1. 박스 하단 중앙점 계산
             cx = x + w / 2
             cy = y + h

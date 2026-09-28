@@ -1,0 +1,7 @@
+{
+  "video": "Danger.mp4",
+  "frame_index": 252,
+  "media_time_s": 10.08,
+  "provenance": "RealBackend replay using frozen effective config; display FPS=0 (not a measurement)",
+  "run_dir": "/home/geonug/kdt-linux/team_project/team_project/outputs/experiments/batch-20260927T234749-1ed6c599/baseline/Danger-r1/runs/20260927T234804-194f02748d"
+}

@@ -1,4 +1,5 @@
 """A 전처리에 integration의 축소 설정과 실제 축별 좌표 복원을 연결한다."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -7,7 +8,9 @@ import cv2
 import numpy as np
 
 
-def preprocess_frame(frame: np.ndarray, config: dict[str, Any], roi: tuple[int, int, int, int] | None = None) -> tuple[np.ndarray, dict[str, float]]:
+def preprocess_frame(
+    frame: np.ndarray, config: dict[str, Any], roi: tuple[int, int, int, int] | None = None
+) -> tuple[np.ndarray, dict[str, float]]:
     """[담당: 팀원 A]
     목적: 공통 전처리 수행
     매개변수 / 입력 타입: frame: HxWx3 uint8; config: 설정; roi: 튜플 x,y,w,h 또는 None
@@ -30,7 +33,7 @@ def preprocess_frame(frame: np.ndarray, config: dict[str, Any], roi: tuple[int, 
         x, y, rw, rh = roi
         if x < 0 or y < 0 or rw <= 0 or rh <= 0 or x + rw > w or y + rh > h:
             raise ValueError(f"ROI가 프레임 범위를 벗어났습니다: {roi}, frame={w}x{h}")
-        cropped = frame[y:y + rh, x:x + rw]
+        cropped = frame[y : y + rh, x : x + rw]
         offset_x, offset_y = x, y
     else:
         cropped = frame
@@ -67,7 +70,9 @@ def preprocess_frame(frame: np.ndarray, config: dict[str, Any], roi: tuple[int, 
     return blurred, transform
 
 
-def restore_boxes(boxes: list[tuple[int, int, int, int]], transform: dict[str, float]) -> list[tuple[int, int, int, int]]:
+def restore_boxes(
+    boxes: list[tuple[int, int, int, int]], transform: dict[str, float]
+) -> list[tuple[int, int, int, int]]:
     """[담당: 팀원 A]
     목적: 분석 좌표를 원본 좌표로 복원
     매개변수 / 입력 타입: boxes: 분석 x,y,w,h들; transform: 전처리 변환 정보
@@ -90,13 +95,15 @@ def restore_boxes(boxes: list[tuple[int, int, int, int]], transform: dict[str, f
         raise ValueError("scale 값은 양수여야 합니다.")
 
     restored = []
-    for (x, y, w, h) in boxes:
+    for x, y, w, h in boxes:
         # 1. x/scale_x+offset_x 등 역변환
         orig_x = x / scale_x + offset_x
         orig_y = y / scale_y + offset_y
         orig_w = w / scale_x
         orig_h = h / scale_y
         # 2. 정수 반올림 규칙 통일 (반올림 후 int)
-        restored.append((int(round(orig_x)), int(round(orig_y)), int(round(orig_w)), int(round(orig_h))))
+        restored.append(
+            (int(round(orig_x)), int(round(orig_y)), int(round(orig_w)), int(round(orig_h)))
+        )
 
     return restored
