@@ -4,6 +4,7 @@
 의존 관계: OpenCV, NumPy, sys. 구현 TODO: GUI/영상 검증은 별도 수행.
 기존 구현 유지; 함수 인터페이스 없음.
 """
+
 # check_env.py — 개발 환경 점검 스크립트
 import sys
 

@@ -1,0 +1,20 @@
+{
+  "main_runs": 63,
+  "study_runs": 76,
+  "all_completed": true,
+  "all_evaluated": true,
+  "source_frames_complete": true,
+  "recording_verified": true,
+  "input_hashes_preserved": true,
+  "frozen_results_unchanged": true,
+  "slides": 15,
+  "slide_bounds_checked": true,
+  "csv_markdown_ppt_metrics_checked": true,
+  "pdf_bytes": 753165,
+  "note": "PPT XML/text/bounds checked; no PowerPoint/LibreOffice renderer available for pixel rendering",
+  "per_run_tp_fp_fn_recounted": true,
+  "fps_matches_run_benchmark": true,
+  "ppt_embedded_images_match_frozen_figures": 4,
+  "pdf_pages": 11,
+  "pdf_text_within_pages": true
+}

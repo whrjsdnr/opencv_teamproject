@@ -1,0 +1,5 @@
+{
+  "excluded_batch": "study-20260927T235210-8f40ba38",
+  "reason": "Additional pytest overlapped a subset of resolution runs; entire comparison suite rerun without tests. Original results retained.",
+  "selection_rule": "Use next full isolated study, regardless of speed outcome."
+}

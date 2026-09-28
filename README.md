@@ -2,7 +2,7 @@
 
 Python/OpenCV로 작업장 다각형 위험 구역의 움직임을 감시하고 같은 영상으로 순차 처리·멀티스레드·최적화 성능을 비교하는 5일 팀 프로젝트입니다. MOG2 배경 차분과 외곽선을 사용하며 외부 AI 객체 검출 모델은 필수가 아닙니다. 사람 식별·객체 추적은 기본 범위 밖입니다.
 
-**현재 B·C의 파이프라인·녹화·계측·실험 자동화는 구현되었고, A의 감지·구역·상태 함수는 아직 스텁입니다.** 실제 모드는 A 구현을 호출하며 미구현 오류를 숨기지 않습니다. `--mock-detection`은 B·C 연결을 검증하는 시험용 시간표입니다. 실제 촬영 영상의 FPS·정확도·안전성은 아직 측정하지 않았습니다.
+**A의 실제 전처리·MOG2·침입·상태 함수를 B·C 파이프라인에 통합했습니다.** GUI 실행에서는 첫 프레임으로 다각형을 편집하고, headless 실행에서는 `--zones`로 같은 JSON을 사용합니다. 실제 모드 오류를 Mock으로 숨기지 않습니다. `--mock-detection`은 B·C 연결을 검증하는 시험용 시간표입니다. 실제 촬영 영상의 FPS·정확도·안전성은 아직 측정하지 않았습니다.
 
 ## 문제 정의와 개발 목표
 
@@ -47,10 +47,10 @@ team_project/
 
 | 파일 | 담당 | 책임 / 분리 이유 |
 |---|---|---|
-| src/preprocess.py | A | 공통 전처리·좌표 복원 (이번 변경 없음) |
-| src/detect.py | A | MOG2 움직임 및 침입 판정만 (이번 변경 없음) |
-| src/zones.py | A | 다각형 마우스 편집과 JSON 저장·로딩 분리 (이번 변경 없음) |
-| src/state.py | A | N프레임·경보 해제·상태 전이 분리 (이번 변경 없음) |
+| src/preprocess.py | A | 공통 전처리·좌표 복원 (A 실제 구현 선별 반영) |
+| src/detect.py | A | MOG2 움직임 및 침입 판정만 (A 실제 구현 선별 반영) |
+| src/zones.py | A | 다각형 마우스 편집과 JSON 저장·로딩 분리 (A 실제 구현 선별 반영) |
+| src/state.py | A | N프레임·경보 해제·상태 전이 분리 (A 실제 구현 선별 반영) |
 | src/main.py | B | CLI·설정·기존 그레이스케일 preview |
 | src/pipeline.py | B | 실행 모드, A 호환 계층, 입력 스레드, Mock, 화면, 사건 CSV |
 | src/recorder.py | B | 원본 시간 버퍼·구역별 사건 영상만 저장; 감지·CSV 제외 |
@@ -94,7 +94,7 @@ main → FrameSource → 원본 시간 버퍼 → A preprocess → A detect → 
 
 `--queue-policy drop_oldest` 옵션은 **명시적으로 오류 처리**합니다. 분석 큐와 별개로 원본을 보존할 저장 경로가 없으므로 드롭을 허용하지 않습니다. 실제 큐 드롭 수는 현재 0이며 분석 간격에 의한 생략률은 `skip_rate`로 별도 기록합니다. 종료 순간 입력 스레드가 미리 읽은 프레임은 `pending_at_stop`에 기록하며 정상 처리 중 드롭과 구분합니다. 카메라 드라이버 내부 유실은 OpenCV만으로 계수할 수 없습니다.
 
-A의 현재 계약은 **연속 원본 N프레임**입니다. 생략 프레임에는 `intrusions=None`을 전달하며 이전 True를 재사용하지 않습니다. A 계약대로라면 `frame_interval>1`과 `N>1` 조합은 경보를 막을 수 있습니다. 주 비교는 간격 1, 간격 최적화는 정확도 영향을 포함하는 별도 실험입니다. `observed_duration_s`는 마지막으로 관측된 True와 첫 True 사이 영상 시간이며 None에서 늘리지 않습니다. 생략 구간에 침입이 지속됐다고 단정하는 지표가 아닙니다.
+A 구현은 미분석 `None`에서 카운터를 유지하고 인덱스 공백을 검사하지 않습니다. **연속 원본 N프레임** 기준을 유지하기 위해 이번 실제 통합은 `frame_interval=1`, Queue `block`만 허용합니다. 분석 생략 실험은 명시적 Mock에서만 가능합니다. `consecutive_frames`가 A의 `alert_frames`보다 우선하며 기본 경보 5프레임·해제 10프레임은 유지합니다. `observed_duration_s`는 마지막으로 관측된 True와 첫 True 사이 영상 시간이며 None에서 늘리지 않습니다. 생략 구간에 침입이 지속됐다고 단정하는 지표가 아닙니다.
 
 ## 환경 설정 및 실행
 
@@ -121,13 +121,22 @@ python -m src.main --source data/samples/test.mp4 --preview --no-display
 
 `--dry-run`은 설정만 검증하며 파일·카메라·A 기능을 검증하지 않습니다. `--preview`는 기존 그레이스케일 재생이며 실제 감시 Baseline으로 사용하지 않습니다. `q` 또는 Ctrl-C로 종료합니다. 기존 `python src/main.py`도 지원합니다. Linux 입력은 B 안에서 OpenCV 기본 backend를 사용하며 utils의 기존 CAP_DSHOW 코드는 변경하지 않았습니다.
 
-**A 코드와 실제 영상·구역 JSON이 준비되면** 다음 명령으로 감시합니다. 현재 A 스텁이면 오류 메시지와 종료 코드 2를 반환합니다.
+실제 영상으로 다음 명령을 실행합니다. GUI에서는 첫 원본 프레임이 표시됩니다.
+좌클릭: 꼭짓점 추가, Backspace/우클릭: 마지막 점 취소, Enter: 다각형 확정,
+R: 작성 중인 점 초기화, S: JSON 저장, L: JSON 불러오기,
+Space: 저장 후 감시 시작, Q/Esc: 감시 시작 없이 종료입니다.
+여러 구역을 확정할 수 있으며 최소 3점·범위·중복·자기 교차·면적을 검사합니다.
+S/Space 전에 작성 중인 점은 Enter로 확정하거나 R로 지워야 합니다.
+기존 구역은 자동 불러오며, 원본 해상도가 다른 JSON은 거부합니다.
+`--zones data/zones.json`은 저장/불러오기 경로이며 생략 시 config의 `zones_path`를 사용합니다.
+축소 표시의 마우스 좌표는 실제 가로·세로 배율로 원본 픽셀에 복원합니다.
+OpenCV 기본 글꼴 제약 때문에 화면 조작법은 영문으로 표시합니다.
 
 ```bash
 python -m src.main --source data/samples/test.mp4 --mode baseline
 python -m src.main --source data/samples/test.mp4 --mode threaded
 python -m src.main --source data/samples/test.mp4 --mode optimized
-python -m src.main --source data/samples/test.mp4 --mode baseline --no-display
+python -m src.main --source data/samples/test.mp4 --mode baseline --zones data/zones.json --no-display
 ```
 
 B·C만 검증할 때는 준비한 영상에 명시적 Mock을 사용합니다.
@@ -176,7 +185,7 @@ CSV는 사건당 한 행을 메모리에 유지하고 종료 시 저장합니다
 
 ## A 팀원과 연결하는 인터페이스
 
-A 파일과 `utils.py`는 수정하지 않았습니다. `RealBackend`가 아래 기존 함수를 호출하므로 A 구현을 병합하면 같은 CLI를 사용합니다.
+A Fork의 `0c6476bd36b6f17f80087ea22ec195edda92fc87` (`Add detection`)에서 루트의 `preprocess.py`, `detect.py`, `zones.py`, `state.py`를 `src/`로 선별 반영했습니다. 공통 조상이 없어 Git merge하지 않았습니다. B·C와 `config.json`의 기존 기본값을 보존하고 `RealBackend`가 다음 실제 함수를 호출합니다.
 
 | 함수 | 입력 → 출력 |
 |---|---|
@@ -194,9 +203,9 @@ A 파일과 `utils.py`는 수정하지 않았습니다. `RealBackend`가 아래 
 {"schema_version":1,"frame_size":[1280,720],"zones":[{"name":"위험구역 A","points":[[100,100],[400,100],[400,400]]}]}
 ```
 
-전이는 `{type: "alert"|"cleared", event_id, zone_name, media_time_s}`를 포함해야 합니다. 사건 ID는 alert와 cleared에서 같아야 합니다. 상태 dict의 각 구역은 `status`를 포함하며 IDLE/DETECTING/ALERT/CLEARED를 사용합니다. B는 선택적 `start_time_s`, `end_time_s`를 지원하지만 A에게 새 필드를 강제하지 않습니다. 없으면 B의 관측 메타데이터로 보완합니다. A가 반환하는 기존 `duration_s`는 CSV의 새로운 지속 시간 정의에 사용하지 않습니다.
+A는 `{event, zone, frame_index, media_time_s}`를 반환하며 상태 키는 `state`입니다. `RealBackend`가 사건 ID를 발급하고 B의 키로 변환합니다. B로 전달하는 전이는 `{type: "alert"|"cleared", event_id, zone_name, media_time_s}`를 포함해야 합니다. 사건 ID는 alert와 cleared에서 같아야 합니다. 상태 dict의 각 구역은 `status`를 포함하며 IDLE/DETECTING/ALERT/CLEARED를 사용합니다. B는 선택적 `start_time_s`, `end_time_s`를 지원하지만 A에게 새 필드를 강제하지 않습니다. 없으면 B의 관측 메타데이터로 보완합니다. A가 반환하는 기존 `duration_s`는 CSV의 새로운 지속 시간 정의에 사용하지 않습니다.
 
-A의 프레임 간격 의미를 임의로 바꾸지 않습니다. 인터페이스 변경이 필요하면 담당 팀원 합의 후 PR에 이유와 영향을 적으세요. 구역 편집 CLI는 A 완성 이후 연결할 TODO입니다. 화면의 OpenCV 기본 폰트는 한글을 지원하지 않아 구역은 Zone 1/2 순서로 표시하며 이름 매핑은 effective_config.json에 보존합니다.
+A의 CLEARED 직후 재침입 고착은 실패 재현 테스트를 먼저 작성한 후 다음 관측에서 새 사건을 시작하도록 최소 수정했습니다. MOG2의 그림자 제거·형태학 연산·하단 중앙점 침입 기준은 보존했습니다. 화면의 OpenCV 기본 폰트는 한글을 지원하지 않아 구역은 Zone 1/2 순서로 표시하며 이름 매핑은 effective_config.json에 보존합니다.
 
 ## 설정값
 
@@ -227,7 +236,7 @@ A의 프레임 간격 의미를 임의로 바꾸지 않습니다. 인터페이�
 | duration_seconds / loop_video | 0.0 / false | 측정 벽시계 제한(0=EOF) / EOF 재생 반복 |
 | thread_join_timeout | 5.0 | 종료 대기 상한; 블로킹 카메라 read는 장치별 한계 |
 
-테스트에서만 `mock_events=[{zone_name, start, alert, end}]` 시간표를 설정할 수 있습니다. B는 B/C 범위를 검증하며 A의 전체 MOG2·다각형 유효성 검사는 A 책임입니다.
+테스트에서만 `mock_events=[{zone_name, start, alert, end}]` 시간표를 설정할 수 있습니다. 기존 Mock 테스트와 실제 MOG2 합성 영상 통합 테스트는 구분합니다. 실제 촬영 정확도 검사는 별도입니다.
 
 ## Benchmark 실행과 측정 정의
 
@@ -241,7 +250,7 @@ python -m src.benchmark --source data/samples/test.mp4 --no-display --seconds 60
 python -m src.benchmark --source data/samples/test.mp4 --no-display --ablations
 ```
 
-`--ablations`는 optimized의 none/ROI만/축소만/간격만/큐 크기만 조건을 추가합니다. standard optimized는 config의 조합입니다. 드롭 실험은 비활성 상태입니다. 위 명령도 A 구현이 필요합니다. 자동화 연결만 확인하려면 `--mock-detection`을 추가하되 결과는 실제 성능으로 사용하지 않습니다. 이번 작업에서 공식 60초×3회 측정은 수행하지 않았습니다.
+`--ablations`는 optimized의 none/ROI만/축소만/간격만/큐 크기만 조건을 추가합니다. standard optimized는 config의 조합입니다. 드롭 실험은 비활성 상태입니다. 실제 `--ablations`는 간격 2 조건이 포함되므로 실행 전에 거부합니다. 실제 비교는 standard 세 모드로 실행하세요. 자동화 연결만 확인하려면 `--mock-detection`을 추가하되 결과는 실제 성능으로 사용하지 않습니다. 이번 작업에서 공식 60초×3회 측정은 수행하지 않았습니다.
 
 짧은 파일은 실제 파일을 다시 읽습니다. 경계에서 MOG2·상태를 초기화하고 기존 클립은 truncated로 종료합니다. 시각은 누적 offset으로 단조 증가합니다. **warm-up 제외는 실행 최초에만 적용**하며 이후 반복 경계의 재학습·초기화 비용은 측정에 포함합니다. 경계 초기화로 인한 오경보·사건 절단은 실제 연속 촬영 성능과 다르므로 정확도 평가는 반복 없는 단일 영상 실행으로 합니다.
 
@@ -306,7 +315,7 @@ python -m src.benchmark --plot-only results/benchmark_summary.csv --output-dir r
 
 B·C 기능은 pytest의 작은 합성 프레임·임시 영상으로 검증합니다. 합성 자료는 테스트 임시 폴더에만 생성하며 실제 촬영·성능 결과로 기록하지 않습니다. 실제 영상·GUI·카메라·A 구현과의 종단 간 성능은 미검증입니다.
 
-- A: zones/preprocess/detect/state를 기존 계약으로 구현 후 병합. N=1·경계·다중 구역·생략·해제를 확인합니다.
+- A: 통합한 실제 구현을 촬영 영상에서 검토하고 경계·다중 구역·초기 배경 학습·정지 객체를 확인합니다. 실제 분석 생략은 이번 통합에서 허용하지 않습니다.
 - B: 실제 장치의 FPS·PTS·codec·GUI를 확인하고 독립 녹화 보존 경로를 만든 뒤 드롭 정책을 검토합니다.
 - C: 실제 영상·정답 확보 후 단일 영상 정확도 평가 → 60초×3회 공식 실험 → 병목·지연·정확도 분석을 수행합니다.
 - 공통: 긴 녹화의 메모리·디스크 사용량, 강제 종료 시 데이터 보존, 카메라 read가 종료 신호를 무시하는 장치의 격리 방식을 검토합니다. 현재 join timeout은 오류를 보고하지만 장치 내부 블로킹을 강제로 해제하지 못합니다.
@@ -329,6 +338,34 @@ git switch -c feature/detection upstream/main
 
 A는 feature/detection, B는 feature/pipeline, C는 feature/benchmark를 사용합니다. 이번 B·C 통합 구현은 `feature/pipeline-benchmark`에서 작업합니다. 원본 main 직접 Push 대신 PR·리뷰를 거칩니다. 공통 파일 및 함수 계약 변경은 관련 팀원에게 공유하세요. 자세한 규칙은 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
 
-### 이번 B·C 구현 검증 환경
+### 통합 이전 B·C 구현 검증 기록
 
-Python 3.10.21, OpenCV contrib 4.10.0.84 (`cv2.__version__=4.10.0`), NumPy 1.26.4, Pandas 2.2.2, Matplotlib 3.8.4, pytest 9.1.1의 격리 `.venv`에서 검증했습니다. `pip check`는 정상입니다. Matplotlib 3.8.4와 설치된 pyparsing 조합의 deprecation 경고는 테스트 실패가 아닙니다. 최종 pytest 결과는 33 passed이며, 문법 검사·CLI dry-run·빈 데이터 그래프 처리·A 및 utils 무변경도 확인했습니다. 실제 영상·카메라·GUI·공식 성능 실험은 미검증입니다.
+Python 3.10.21, OpenCV contrib 4.10.0.84 (`cv2.__version__=4.10.0`), NumPy 1.26.4, Pandas 2.2.2, Matplotlib 3.8.4, pytest 9.1.1의 격리 `.venv`에서 검증했습니다. `pip check`는 정상입니다. Matplotlib 3.8.4와 설치된 pyparsing 조합의 deprecation 경고는 테스트 실패가 아닙니다. 통합 이전 pytest 결과는 33 passed였으며, 문법 검사·CLI dry-run·빈 데이터 그래프 처리·A 및 utils 무변경도 확인했습니다. 실제 영상·카메라·GUI·공식 성능 실험은 미검증입니다.
+
+
+## 감지 통합 검증
+
+통합 브랜치는 `feature/detection-integration`이며 기반 main은 `f4240a7624ad1d4632abe7cb7656e3b82ce7ba9b`입니다.
+한국어 주석과 docstring에 원본/입력/분석 좌표, 사건 키 변환, 스레드 시작 순서를 설명했습니다.
+
+```bash
+.venv/bin/python -m pytest -q
+.venv/bin/python -m src.main --source YOUR_VIDEO.mp4 --zones data/zones.json --mode baseline
+.venv/bin/python -m src.main --source YOUR_VIDEO.mp4 --zones data/zones.json --mode threaded --no-display
+.venv/bin/python -m src.main --source YOUR_VIDEO.mp4 --zones data/zones.json --mode optimized --no-display
+```
+
+통합 후 `.venv/bin/python -m pytest -q` 결과는 **47 passed, 13 warnings**입니다. 경고는 기존 Matplotlib/pyparsing 사용 중단 예정 API에서 발생했습니다. `git diff --check`, Python 문법 검사, CLI dry-run도 통과했습니다.
+
+신규 테스트는 JSON 저장·불러오기·잘못된 다각형 거부, 표시 좌표와 ROI 축척 복원,
+기본 5프레임 경보, 해제 직후 재침입, 편집기 키/마우스 콜백, 첫 프레임 유실 방지,
+세 모드의 실제 MOG2→경고 상태→사건 CSV→자동 녹화를 검사합니다.
+합성 영상에서 경보 전 3초, 해제 확정 후 5초와 장시간 경보 중 녹화 연장을 확인하고
+출력 파일을 재디코딩하여 원본 해상도·프레임 수를 확인합니다.
+CSV의 end_time은 해제 확정으로 이어진 첫 비침입 관측 시각이며, 녹화는 해제 **확정** 시각부터 5초입니다.
+녹화에는 기존 B의 원본 보존 정책에 따라 경고/박스 오버레이를 굽지 않습니다. 화면에는 복원된 박스와 구역을 표시합니다.
+
+실제 촬영 영상·카메라·물리 GUI 조작·HiDPI 창 관리자·공식 성능/정확도 측정은 미실행입니다.
+GUI 자동 검사는 창 호출을 대체하여 실행 흐름을 검사한 것이므로 실제 마우스 수동 검증을 대신하지 않습니다.
+MOG2는 움직임 기반이므로 정지한 객체의 배경 흡수와 초기 배경 학습 오검출은 실제 영상에서 확인해야 합니다.
+초기 warmup_frames는 기존대로 계측 제외용이며 감지 억제 기준을 새로 추가하지 않았습니다.

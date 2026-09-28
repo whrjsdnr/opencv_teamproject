@@ -1,3 +1,5 @@
+"""A PR #2의 MOG2 처리와 B·C 설정/감지 인터페이스를 연결한다."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -9,26 +11,34 @@ import numpy as np
 def create_background_subtractor(config: dict[str, Any]) -> Any:
     """[담당: 팀원 A]
     목적: 실행별 MOG2 인스턴스 생성
-    입력: config(전체 설정 dict, mog2 하위 키 사용)
-    반환: OpenCV BackgroundSubtractorMOG2
+    매개변수 / 입력 타입: config: 검증 설정 dict
+    반환 / 출력 타입: OpenCV BackgroundSubtractorMOG2
+    데이터 처리 순서:
+        1. history, var_threshold, detect_shadows 적용
+        2. 각 실행 시작마다 새 인스턴스 생성
+    예외 및 경계 조건: 유효하지 않은 설정은 ValueError
+    모듈 연결: pipeline에서 1회 생성
     """
-    mog2_cfg = config.get("mog2", {})
-    history = mog2_cfg.get("history", 500)
-    var_threshold = mog2_cfg.get("var_threshold", 16.0)
-    detect_shadows = mog2_cfg.get("detect_shadows", True)
+    # B의 중첩 설정을 우선하고 A의 독립 호출 설정도 유지한다.
+    config = {**config, **config.get("mog2", {})}
+    history = config.get("history", 500)
+    var_threshold = config.get("var_threshold", 16)
+    detect_shadows = config.get("detect_shadows", True)
 
     if not isinstance(history, int) or history <= 0:
-        raise ValueError("mog2.history는 양의 정수여야 합니다")
+        raise ValueError(f"history는 양의 정수여야 합니다: {history}")
     if not isinstance(var_threshold, (int, float)) or var_threshold <= 0:
-        raise ValueError("mog2.var_threshold는 양수여야 합니다")
+        raise ValueError(f"var_threshold는 양수여야 합니다: {var_threshold}")
+
     if not isinstance(detect_shadows, bool):
         raise ValueError("mog2.detect_shadows는 bool이어야 합니다")
 
-    return cv2.createBackgroundSubtractorMOG2(
+    subtractor = cv2.createBackgroundSubtractorMOG2(
         history=history,
         varThreshold=var_threshold,
         detectShadows=detect_shadows,
     )
+    return subtractor
 
 
 def detect_motion(
@@ -41,6 +51,9 @@ def detect_motion(
     입력: frame(분석 BGR uint8), background_subtractor(MOG2), min_area(분석 해상도 기준 최소 면적)
     반환: (x, y, w, h) 바운딩 박스 목록
     """
+    if frame is None or frame.size == 0:
+        raise ValueError("빈 프레임입니다.")
+
     fg_mask = background_subtractor.apply(frame)
 
     # 그림자(127)는 배경으로 취급하고 순수 전경(255)만 사용
@@ -66,35 +79,47 @@ def detect_motion(
 
 
 def check_intrusion(
-    boxes: list[tuple[int, int, int, int]],
-    zones: list[dict[str, Any]],
+    boxes: list[tuple[int, int, int, int]], zones: list[dict[str, Any]]
 ) -> dict[str, bool]:
     """[담당: 팀원 A]
-    목적: 위험 구역별 침입 여부 판정
-    입력: boxes((x,y,w,h) 목록), zones([{name, points}] 목록)
-    반환: {구역 이름: 침입 여부(bool)} - 모든 구역이 키로 포함됨 (침입 없으면 False)
-
-    판정 기준: 각 박스의 바닥 중심점(x + w/2, y + h)을
-    cv2.pointPolygonTest로 각 구역 폴리곤과 비교.
+    목적: 박스 하단 중앙점이 구역에 침입했는지 판단
+    매개변수 / 입력 타입: boxes: 원본 좌표; zones: name, points를 가진 목록
+    반환 / 출력 타입: {구역 이름: 침입 bool} (모든 구역 포함)
+    데이터 처리 순서:
+        1. 박스 하단 중앙점 계산
+        2. pointPolygonTest로 경계를 포함한 내부 판정
+        3. 구역별 하나 이상이면 True
+    예외 및 경계 조건: 박스가 없으면 False; 중복 구역명은 ValueError
+    모듈 연결: pipeline → state; 공통 침입 판단 기준
     """
-    result: dict[str, bool] = {zone["name"]: False for zone in zones}
+    result: dict[str, bool] = {}
 
-    if not boxes or not zones:
-        return result
+    for zone in zones:
+        zone_name = zone.get("id") or zone.get("name")
+        if not zone_name:
+            raise ValueError(f"구역 이름이 없습니다: {zone}")
 
-    zone_polys = [
-        (zone["name"], np.array(zone["points"], dtype=np.float32))
-        for zone in zones
-    ]
+        if zone_name in result:
+            raise ValueError(f"중복 구역 이름입니다: {zone_name}")
+        points = zone.get("points")
+        if not points or len(points) < 3:
+            raise ValueError(f"구역 {zone_name}의 다각형 점이 3개 미만입니다.")
 
-    for (x, y, w, h) in boxes:
-        # 바닥 중심점을 사용 (사람/물체가 바닥에 닿는 지점 기준 판정이 더 정확)
-        point = (float(x + w / 2), float(y + h))
-        for name, poly in zone_polys:
-            if result[name]:
-                continue  # 이미 침입으로 확정된 구역은 재검사 불필요
-            inside = cv2.pointPolygonTest(poly, point, False)
-            if inside >= 0:  # 0: 경계선 위, 1: 내부 -> 둘 다 침입으로 간주
-                result[name] = True
+        polygon = np.array(points, dtype=np.float32)
+        intruded = False
+
+        for x, y, w, h in boxes:
+            # 1. 박스 하단 중앙점 계산
+            cx = x + w / 2
+            cy = y + h
+
+            # 2. pointPolygonTest로 점 포함 내부 판정
+            inside = cv2.pointPolygonTest(polygon, (float(cx), float(cy)), False)
+            if inside >= 0:
+                intruded = True
+                break
+
+        # 3. 구역별 하나 이상이면 True
+        result[zone_name] = intruded
 
     return result

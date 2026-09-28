@@ -4,6 +4,7 @@
 의존 관계: OpenCV, NumPy, 표준 라이브러리; main/pipeline이 사용.
 구현 TODO: 기존 동작 보존; Linux 카메라 backend는 팀 합의 후 개선.
 """
+
 # utils.py — 모든 팀이 공통으로 쓰는 도우미 함수
 import json
 import os
