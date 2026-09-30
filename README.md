@@ -47,23 +47,23 @@ team_project/
 
 | 파일 | 담당 | 책임 / 분리 이유 |
 |---|---|---|
-| src/preprocess.py | A | 공통 전처리·좌표 복원 (A 실제 구현 선별 반영) |
-| src/detect.py | A | MOG2 움직임 및 침입 판정만 (A 실제 구현 선별 반영) |
-| src/zones.py | A | 다각형 마우스 편집과 JSON 저장·로딩 분리 (A 실제 구현 선별 반영) |
-| src/state.py | A | N프레임·경보 해제·상태 전이 분리 (A 실제 구현 선별 반영) |
-| src/main.py | B | CLI·설정·기존 그레이스케일 preview |
-| src/pipeline.py | B | 실행 모드, A 호환 계층, 입력 스레드, Mock, 화면, 사건 CSV |
-| src/recorder.py | B | 원본 시간 버퍼·구역별 사건 영상만 저장; 감지·CSV 제외 |
-| src/benchmark.py | C | 단계 계측·통계·CSV·실험 반복·그래프·정답 매칭 |
+| src/preprocess.py | 원치운 | 공통 전처리·좌표 복원 (A 실제 구현 선별 반영) |
+| src/detect.py | 원치운 | MOG2 움직임 및 침입 판정만 (A 실제 구현 선별 반영) |
+| src/zones.py | 원치운 | 다각형 마우스 편집과 JSON 저장·로딩 분리 (A 실제 구현 선별 반영) |
+| src/state.py | 원치운 | N프레임·경보 해제·상태 전이 분리 (A 실제 구현 선별 반영) |
+| src/main.py | 조건욱 | CLI·설정·기존 그레이스케일 preview |
+| src/pipeline.py | 조건욱 | 실행 모드, A 호환 계층, 입력 스레드, Mock, 화면, 사건 CSV |
+| src/recorder.py | 조건욱 | 원본 시간 버퍼·구역별 사건 영상만 저장; 감지·CSV 제외 |
+| src/benchmark.py | 조건욱 | 단계 계측·통계·CSV·실험 반복·그래프·정답 매칭 |
 | src/utils.py | 공통 | 기존 유틸리티 구현·시그니처 보존 |
 | config.json / README.md | 공통 | 초기 실험 설정 / 실행·인터페이스 계약 |
 | requirements.txt / check_env.py | 공통 | 기존 고정 패키지 / 환경 점검 보존 |
 | CONTRIBUTING.md / .gitignore | 공통 | Fork·PR 규칙 / 데이터·환경·비밀 파일 제외 |
 | data/SOURCES.md | 공통 | 영상 출처·촬영자·촬영일·권한 기록 |
 | docs/수행계획서.md | 공통 | 5일 일정·팀 역할 |
-| docs/실험기록.md / 최종보고서.md | C | 실제 측정 기록·병목 및 정확도 분석 |
-| docs/ground_truth_template.csv | C | 추가: 실제 영상 정답 사건표의 고정 컬럼 |
-| tests/test_*.py | B·C | 추가: 합성 프레임·임시 영상으로 기능과 실패 경로 검증 |
+| docs/실험기록.md / 최종보고서.md | 조건욱 | 실제 측정 기록·병목 및 정확도 분석 |
+| docs/ground_truth_template.csv | 조건욱 | 추가: 실제 영상 정답 사건표의 고정 컬럼 |
+| tests/test_*.py | 조건욱 | 추가: 합성 프레임·임시 영상으로 기능과 실패 경로 검증 |
 
 ## 시스템 아키텍처와 세 버전
 
